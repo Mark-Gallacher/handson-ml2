@@ -41,13 +41,13 @@ tensorflow-probability~=0.14.1
 tfx~=1.3.0
 
 # Optional: only used in chapter 16.
-tensorflow-addons~=0.14.0
+# tensorflow-addons~=0.14.0
 
 ##### Reinforcement Learning library (chapter 18)
 
 # There are a few dependencies you need to install first, check out:
 # https://github.com/openai/gym#installing-everything
-gym[Box2D,atari,accept-rom-license]~=0.21.0
+# gym[Box2D,atari,accept-rom-license]~=0.21.0
 
 # WARNING: on Windows, installing Box2D this way requires:
 # * Swig: http://www.swig.org/download.html
