@@ -11,6 +11,9 @@ pandas = "*"
 scipy = "*"
 scikit-learn = "*"
 joblib = "*"
+ipyparallel = "*"
+ipympl = "*"
+tensorflow = "*"
 
 [dev-packages]
 
