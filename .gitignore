@@ -11,7 +11,6 @@ logs/*
 tf_logs/*
 images/**/*.png
 images/**/*.dot
-my_*
 person.proto
 person.desc
 person_pb2.py
@@ -20,4 +19,4 @@ datasets/lifesat/lifesat.csv
 datasets/spam
 datasets/words
 datasets/jsb_chorales
-
+quarto/
