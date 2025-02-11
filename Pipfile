@@ -14,6 +14,8 @@ joblib = "*"
 ipyparallel = "*"
 ipympl = "*"
 tensorflow = "*"
+neovim = "*"
+jupyter-cache = "*"
 
 [dev-packages]
 

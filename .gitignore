@@ -5,6 +5,8 @@
 *.pyc
 .DS_Store
 .ipynb_checkpoints
+.jupyter_cache
+my_projects/.gitignore
 .quarto
 .vscode/
 checkpoint

@@ -12,13 +12,16 @@ format:
         link-external-icon: true
         link-external-newwindow: true
 theme: 
-    light: flatly
-    dark: darkly
+    dark: cyborg
+    light: lux
+highlight-style: dracula
 toc: true
-toc-depth: 2
+toc-depth: 3
 toc-title: "Overview"
 number-sections: true
 number-depth: 2
+execute:
+    cache: true
 ---
 
 # Basic Perceptron
@@ -56,6 +59,7 @@ We can play around with the Perceptron thanks to `Perceptron` in **Scikit-Learn*
 from sklearn.datasets import load_iris
 from sklearn.linear_model import Perceptron
 import numpy as np
+from tensorflow._api.v2.config import optimizer
 
 iris = load_iris()
 
@@ -171,16 +175,386 @@ $$
 z_{j}^{l} = \sum_{k = 1}^{m} w_{jk}^{l} a_{k}^{l - 1} + b_{j}^{l}
 $$ {#eq-activation}
 
-# Introduction to TensorFlow and Keras
+# Introduction to Classification in TensorFlow
 
 
 ```{python}
+from sklearn.utils.extmath import softmax
 import tensorflow as tf
+from tensorflow import keras
 
-tf.config.list_physical_devices()
+print(tf.config.list_physical_devices())
+
+print(tf.__version__)
+print(keras.__version__)
 ```
 
+## Fashion MNIST Problem
+
+Similar to that classic dataset of handwritten digits, with around 70,000 images that are 28x28 pixels. The Fashion MNIST represents items of fashion instead, 
+which is more diverse and challenging than the digits. 
+
+
+```{python}
+fashion_mnist = keras.datasets.fashion_mnist
+
+(X_train_full, y_train_full), (X_test, y_test) = fashion_mnist.load_data()
+
+print(X_train_full.shape)
+print(X_train_full.dtype)
+```
+
+It looks like we have 60,000 images that are represented by a 28x28 matrix. Let's take a look at the first image, to see how the image is store inside the array.
+
+
+
+```{python}
+print(X_train_full[0])
+print(y_train_full[0])
+```
+
+The values of intensity don't range from 0 to 1, as we would need for our neural network, they most likely go up to 255. Let's scale our data and create a validation set, 
+since we only have a train and test set.
+
+
+```{python}
+## take the first 5000 samples, put them into the validation set.
+X_valid, X_train = X_train_full[:5000] / 255.0, X_train_full[5000:] / 255.0
+y_valid, y_train = y_train_full[:5000], y_train_full[5000:]
+
+## define class names, more useful that just a number
+class_names = ["T-Shirt", "Trouser", "Pullover", "Dress", "Coat",
+               "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"]
+```
+
+
+
+```{python}
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+print("This image should be labelled as ", class_names[y_train[0]])
+
+plt.imshow(X_train[0], cmap = "binary")
+plt.axis("off")
+plt.show()
+```
+
+Let's take a look at more images, to get an idea of how varied they are. 
+
+```{python}
+rows, cols = 3, 8
+
+plt.figure(figsize = (cols * 1.2, rows * 1.2))
+
+for r in range(rows):
+    for c in range(cols):
+        index = cols * r + c
+        plt.subplot(rows, cols, index + 1)
+        plt.imshow(X_train[index], cmap = "binary", interpolation="nearest")
+        plt.axis("off")
+        plt.title(class_names[y_train[index]], fontsize = 12)
+
+plt.subplots_adjust(wspace=0.2, hspace=0.5)
+plt.show()
+```
+
+## The Model
+
+We are going to begin with a fairly simple model, it will have two hidden layers.
+
+
+```{python}
+## initialise the model
+model = keras.models.Sequential()
+## add the input layer, detailing the current shape of data
+model.add(keras.Input(shape = (28, 28)))
+## add the two hidden layers, using a ReLU activation function.
+model.add(keras.layers.Dense(300, activation="relu"))
+model.add(keras.layers.Dense(100, activation="relu"))
+
+## use softmax because classes are exclusive, cannot be a coat and a boot.
+model.add(keras.layers.Dense(10, activation="softmax"))
+```
+
+An alternative way to write this code, is to pass a list of the layers when we first create the model. 
+Let's view a summary of the model using `summary()` and `keras.utils.plot_model()` to get a table and a image, 
+respectively.
+
+
+```{python}
+keras.backend.clear_session()
+
+model = keras.models.Sequential([
+
+    keras.layers.InputLayer(shape = (28, 28)),
+    keras.layers.Flatten(),
+    keras.layers.Dense(300, activation="relu"),
+    keras.layers.Dense(100, activation="relu"),
+    keras.layers.Dense(10, activation="softmax")
+
+])
+
+
+model.summary()
+```
+
+## Defining How to Train the Model
+
+We now have our model, but we need to define how we want to train it. We need to specify a loss function, 
+an optimiser for this loss function and a metric(s) we are interested in using to evaluate our model. 
+
+
+```{python}
+model.compile(
+    ## "sdg"
+    optimizer = keras.optimizers.SGD(), 
+    loss = keras.losses.sparse_categorical_crossentropy, ## sparse because the classes are ints, instead of one-hot vectors
+    ## loss = keras.losses.CategoricalCrossentropy,
+    metrics = ["accuracy"]
+)
+```
+
+Now we can run the model, I have saving the model as `simple_mpl.keras` but only when that file doesn't exist, meaning I haven't 
+ran this code before. This means we don't retrain the model every time I run this document.
+
+## Training the Model
+
+```{python}
+import json
+import os
+
+model_dir, model_name = "./models", "simple_mlp"
+full_path = f"{model_dir}/{model_name}"
+
+## check if we have a saved model and history already
+if os.path.exists(f"{full_path}.json") and os.path.exists(f"{full_path}.keras"):
+
+    history = json.load(open(f"{full_path}.json", "r"))
+    model = tf.keras.models.load_model(f"{full_path}.keras")
+
+## else, train the model and store the weights and history.
+else:
+
+    output = model.fit(X_train, y_train, 
+                   epochs=30, ## remember an epoch used the entire data, so it is likely made of more than one batch
+                   validation_data = (X_valid, y_valid))
+
+    history = output.history
+    json.dump(history, open(f"{full_path}.json", "w"))
+
+    model.save(f"{full_path}.keras")
+
+```
+
+Now we have trained our model on our training set, and scored the performance at every epoch with the validation set, 
+we are ready to use our model for predictions. But first, we are going to look at the output we generated in the previous code, 
+and see what is inside our `output` variable.
+
+
+```{python}
+
+print(history.keys())
+
+```
+
+
+It looks like we have 4 lists, loss for the training and validation set and the accuracy for the training and validation set.
+Usually we want to plot these values, to help detect issues during training, like over-fitting. 
+
+## Visualising the Training Curves
+
+```{python}
+import pandas as pd
+
+df = pd.DataFrame(history).plot(figsize = (8, 6))
+plt.grid(True) ## show the grid
+plt.gca().set_ylim(0, 1) ## our values only make sense between 0 and 1
+plt.gca().set_xlim(0, 29) ## we used 30 epochs, so no point extending range.
+plt.show()
+```
+
+These training curves look pretty good, the validation loss and accuracy is generally close to the training loss and accuracy. One thing to note when looking
+at these curves, is the training values are generated *during* an epoch whereas the validation is calculated after an epoch. You would always expect a slight bias
+favouring the validation, this is more clear at the start of the training. It is often encouraged to shift the training values by half an epoch to overcome this bias.
+Another thing to notice is, although the loss and accuracy slow down, they have not yet plateaued, indicating a longer training period would improve results. 
+
+## Evaluating our Model
+
+In practise, we would tune the hyperparameters, try other activation functions, and optimisers to find the most optimal model. However, let's pretend we have done that and
+we are happy with our model, we should now use our test set to evaluate the generalisability of our model. As you can see, the test scores a bit short of the validation scores, 
+which is typical especially after hyperparameter tuning. But again, in our case, this is probably just bad luck. 
+
+
+```{python}
+model.evaluate(X_test, y_test)
+```
+
+## Making Prediction
+
+Now our model is ready to be used to make (hopefully) good predictions. In our case, we want to show it new images of clothes, and get the type of item it is.
+Instead, we are just going to use the first three elements in our data, for simplicity. We can predict the probability of each class, the confidence that 
+sample belongs to that class, and look at which class has the highest confidence. 
+
+
+```{python}
+X_new = X_train[:3] ## get the images
+y_new = y_train[:3] ## get the correct labels 
+
+y_prob = model.predict(X_new).round(3)
+y_class = np.argmax(y_prob, axis = 1)
+pred_class = np.array(class_names)[y_class]
+
+print("Getting the Probability of each class: \n", y_prob)
+print("Getting the Label for each sample: \n", y_class)
+print("\nThe Predicted Labels are: \n", pred_class)
+
+```
+
+
+```{python}
+#| echo: false
+rows, cols = 1, 3
+
+plt.figure(figsize = (cols * 2.4, rows * 2.4))
+
+for r in range(rows):
+    for c in range(cols):
+        index = cols * r + c
+        plt.subplot(rows, cols, index + 1)
+        plt.imshow(X_train[index], cmap = "binary", interpolation="nearest")
+        plt.axis("off")
+        plt.title(class_names[y_train[index]], fontsize = 12)
+
+plt.subplots_adjust(wspace=0.2, hspace=0.5)
+plt.show()
+```
+
+The models were over 90% confident in all three of these samples, and more importantly, confident in the correct class.
+Ideally, we would want higher levels of confidence, which would come from a more refined and optimised model.
+
+# Introduction to Regression in TensorFlow
+
+We are now going to tackle the classic California Housing dataset. For convenience, we won't use the full dataset, but the 
+tidy and smaller version that is available through `scikit-learn`[^2]. After we loaded the data in with `fetch_california_housing`, 
+we need to create our train, test and validation sets. Finally, since we are know there are no categorical features or missing values, 
+we can go straight into scaling our data to work better with the neural network.
+
+
+```{python}
+from sklearn.datasets import fetch_california_housing
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+
+housing = fetch_california_housing()
+
+X_train_, X_test, y_train_, y_test = train_test_split(housing.data, housing.target)
+X_train, X_valid, y_train, y_valid = train_test_split(X_train_, y_train_)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_valid = scaler.transform(X_valid)
+X_test = scaler.transform(X_test)
+
+```
+
+## The Model
+
+We are going to have a simple model, that has one hidden layer with 30 neurons and one output layer. Importantly, because this is regression
+we don't need to use an activation function for the last layer, and since we are predicting the price, we only need one neuron. 
+
+```{python}
+from tensorflow.keras.layers import Dense
+
+model = tf.keras.models.Sequential([
+
+    tf.keras.Input(shape = X_train.shape[1:]),
+    Dense(30, activation = "relu"),
+    Dense(1) ## output layer
+
+])
+
+model.summary()
+```
+
+## Defining How to Train the Model
+
+Next we need to specify how the model should be compiled or trained.
+
+ 
+```{python}
+
+model.compile(
+    loss = "mean_squared_error", 
+    optimizer = tf.keras.optimizers.SGD(learning_rate = 1e-3)
+)
+```
+
+## Training the Model
+
+```{python}
+model_dir, model_name = "./models", "basic_regression"
+full_path = f"{model_dir}/{model_name}"
+
+## check if we have a saved model and history already
+if os.path.exists(f"{full_path}.json") and os.path.exists(f"{full_path}.keras"):
+
+    history = json.load(open(f"{full_path}.json", "r"))
+    model = tf.keras.models.load_model(f"{full_path}.keras")
+
+## else, train the model and store the weights and history.
+else:
+
+    output = model.fit(X_train, y_train, 
+                   epochs = 20, ## remember an epoch used the entire data, so it is likely made of more than one batch
+                   validation_data = (X_valid, y_valid))
+
+    history = output.history
+    json.dump(history, open(f"{full_path}.json", "w"))
+
+    model.save(f"{full_path}.keras")
+
+```
+## Visualising the Training Curves
+
+
+```{python}
+pd.DataFrame(history).plot(figsize = (8, 6))
+plt.grid(True)
+plt.gca().set_ylim(0, 1)
+plt.gca().set_xlim(0, 19)
+plt.show()
+```
+
+
+## Evaluating our Model
+
+
+```{python}
+model.evaluate(X_test, y_test)
+```
+
+## Making Predictions
+
+
+```{python}
+X_new = X_train[:3]
+y_new = y_train[:3]
+
+y_pred = model.predict(X_new).round(2)
+
+print("Model Predicted the values of:\n", *y_pred)
+print("Actual Prices are:\n", y_new.round(2))
+```
+
+
+
+
+# Footnotes
 
 [^1]: This is usually the *Mean Squared Error*, but if the data has a lot of outliers, the *Mean Absolute Error* might be better. If you want 
 to get fancy, you could even use *Huber Loss*, which is the combination of the too.
 
+[^2]: For the full dataset, and preprocessing, look at the Housing notebook. 
